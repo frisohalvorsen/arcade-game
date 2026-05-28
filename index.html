@@ -7,12 +7,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Arcade" />
-<meta name="description" content="A mini arcade: Tic-Tac-Toe and Tetris." />
+<meta name="apple-mobile-web-app-title" content="Friso's Arcade" />
+<meta name="description" content="Friso's Arcade: Tic-Tac-Toe and Tetris." />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="icon.svg" />
-<title>Arcade — Tic-Tac-Toe & Tetris</title>
+<title>Friso's Arcade</title>
 <style>
   :root {
     --bg: #0f172a;
@@ -31,21 +31,29 @@
     --hard: #f87171;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  html, body { margin: 0; padding: 0; background: #06091a; color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     min-height: 100vh; min-height: 100dvh; overscroll-behavior: none;
     touch-action: manipulation; }
-  body {
-    background:
-      radial-gradient(1200px 600px at 80% -10%, rgba(34,211,238,0.08), transparent 60%),
-      radial-gradient(1000px 500px at -10% 110%, rgba(244,114,182,0.08), transparent 60%),
-      var(--bg);
-  }
-  #app { max-width: 480px; margin: 0 auto; padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+  #app { position: relative; z-index: 1; max-width: 480px; margin: 0 auto;
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
     min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
-  h1 { font-size: 28px; margin: 4px 0 20px; text-align: center; letter-spacing: 0.5px;
-    background: linear-gradient(90deg, var(--x), var(--o));
-    -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; }
+  h1 { font-size: 32px; margin: 4px 0 20px; text-align: center; letter-spacing: 2px;
+    font-weight: 900; text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 40px var(--x), 0 0 80px var(--x), 0 0 120px var(--x);
+    animation: flicker 6s infinite; }
+  @keyframes flicker {
+    0%,19%,21%,23%,25%,54%,56%,100% {
+      text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 40px var(--x), 0 0 80px var(--x), 0 0 120px var(--x);
+    }
+    20%,24%,55% { text-shadow: none; opacity: 0.85; }
+  }
+  /* Scanline overlay */
+  #app::before { content: ''; position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0px, rgba(0,0,0,0.06) 1px, transparent 1px, transparent 3px);
+  }
   h2 { font-size: 20px; margin: 0 0 16px; text-align: center; }
   .view { display: none; flex: 1; flex-direction: column; }
   .view.active { display: flex; }
@@ -195,11 +203,12 @@
 </style>
 </head>
 <body>
+<canvas id="bg-canvas"></canvas>
 <div id="app">
-  <h1 id="title">Arcade</h1>
+  <h1 id="title">Friso's Arcade</h1>
 
   <!-- PICKER -->
-  <div id="view-picker" class="view active">
+  <div id="view-picker" class="view active" style="justify-content:center; gap:0;">
     <div class="card">
       <div class="card-title">Pick a game</div>
       <button class="btn primary tall" data-game="ttt">
@@ -1306,6 +1315,130 @@
   })();
 
   tetris.init();
+
+  // ============================================================
+  // ANIMATED BACKGROUND
+  // ============================================================
+  (() => {
+    const c = document.getElementById('bg-canvas');
+    const g = c.getContext('2d');
+    let W, H, raf;
+
+    function resize() {
+      W = c.width = window.innerWidth;
+      H = c.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Floating neon orbs
+    const ORB_COLORS = ['#22d3ee','#f472b6','#a78bfa','#34d399','#facc15'];
+    const orbs = Array.from({length: 18}, (_, i) => ({
+      x: Math.random(),
+      y: Math.random(),
+      r: 40 + Math.random() * 80,
+      speed: 0.00015 + Math.random() * 0.0002,
+      angle: Math.random() * Math.PI * 2,
+      drift: (Math.random() - 0.5) * 0.0008,
+      color: ORB_COLORS[i % ORB_COLORS.length],
+      phase: Math.random() * Math.PI * 2
+    }));
+
+    // Grid scroll state
+    let scroll = 0;
+
+    function drawGrid(t) {
+      const horizon = H * 0.52;
+      const vanishX = W / 2;
+      scroll = (t * 0.00025) % 1;
+
+      g.save();
+      g.globalAlpha = 0.55;
+
+      const VCOLS = 12, VROWS = 14;
+      const spread = W * 1.6;
+
+      g.strokeStyle = '#22d3ee';
+      g.lineWidth = 0.8;
+      g.shadowColor = '#22d3ee';
+      g.shadowBlur = 4;
+
+      // Vertical lines
+      for (let i = 0; i <= VCOLS; i++) {
+        const tx = (i / VCOLS - 0.5) * spread;
+        const bx = vanishX + tx;
+        g.beginPath();
+        g.moveTo(vanishX, horizon);
+        g.lineTo(bx, H);
+        g.stroke();
+      }
+
+      // Horizontal lines (perspective)
+      for (let i = 0; i <= VROWS; i++) {
+        const pct = Math.pow((i + scroll) / VROWS, 2.2);
+        const y = horizon + (H - horizon) * pct;
+        if (y > H) continue;
+        const alpha = Math.min(1, pct * 2.5);
+        g.globalAlpha = alpha * 0.5;
+        const hw = (spread / 2) * pct;
+        g.beginPath();
+        g.moveTo(vanishX - hw, y);
+        g.lineTo(vanishX + hw, y);
+        g.stroke();
+      }
+
+      // Horizon glow
+      g.globalAlpha = 1;
+      const hGrad = g.createLinearGradient(0, horizon - 18, 0, horizon + 18);
+      hGrad.addColorStop(0, 'transparent');
+      hGrad.addColorStop(0.5, 'rgba(244,114,182,0.55)');
+      hGrad.addColorStop(1, 'transparent');
+      g.fillStyle = hGrad;
+      g.shadowBlur = 0;
+      g.fillRect(0, horizon - 18, W, 36);
+
+      g.restore();
+    }
+
+    function drawOrbs(t) {
+      for (const o of orbs) {
+        o.angle += o.drift;
+        const pulse = 0.7 + 0.3 * Math.sin(t * 0.001 + o.phase);
+        const ox = o.x * W + Math.cos(o.angle) * 30;
+        const oy = o.y * H * 0.55 + Math.sin(o.angle * 0.7) * 20;
+        const grad = g.createRadialGradient(ox, oy, 0, ox, oy, o.r * pulse);
+        grad.addColorStop(0, o.color.replace(')', ',0.18)').replace('rgb', 'rgba').replace('#', 'rgba(').replace('rgba(', 'rgba('));
+        // simpler:
+        const hex = o.color;
+        const r = parseInt(hex.slice(1,3),16), gv = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+        const grd = g.createRadialGradient(ox, oy, 0, ox, oy, o.r * pulse);
+        grd.addColorStop(0, `rgba(${r},${gv},${b},0.22)`);
+        grd.addColorStop(1, `rgba(${r},${gv},${b},0)`);
+        g.fillStyle = grd;
+        g.beginPath();
+        g.arc(ox, oy, o.r * pulse, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+
+    function frame(t) {
+      g.clearRect(0, 0, W, H);
+
+      // Deep space background
+      const bg = g.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, '#06091a');
+      bg.addColorStop(0.5, '#0a0520');
+      bg.addColorStop(1, '#06091a');
+      g.fillStyle = bg;
+      g.fillRect(0, 0, W, H);
+
+      drawOrbs(t);
+      drawGrid(t);
+
+      raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+  })();
 
   // ============================================================
   // PWA
